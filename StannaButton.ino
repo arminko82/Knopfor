@@ -17,7 +17,7 @@
 #include <ESP8266HTTPClient.h>
 
 #define USE_SERIAL 1
-#define USE_WIFI    0
+#define USE_WIFI   0
 
 #define _SSID "xxx"
 #define _PASS "xxx"
@@ -28,24 +28,21 @@ const String SERVER_PORT = "6666";
 const String CMD_MUTE = "mute";
 const String CMD_UNMUTE = "unmute";
 
+const int WORK_FREQUENCY = 10; //Hz
+
 const bool STATE_1 = false;
 const bool STATE_2 = true;
 
 const int BUTTON_PIN = 0;
 const int POWER_PIN = 2;
 
-const int POWER_OFF_INTERVAL = 30000; // 30 seconds till power off on now action
+const int POWER_OFF_INTERVAL = 10000; //  milliseconds till power off on no action
 
 bool _button_pressed = false;
 bool _state = STATE_1; // the external true state does not matter, only the state transition does.
 bool _main_power = true; // while true chip shall run
 
 int _last_action_time = 0;
-
-#if USE_SERIAL
-const int LIGHT_INTERVAL = 1000;
-int _last_light_time = 0;
-#endif
 
 void setup()
 {
@@ -56,6 +53,7 @@ void setup()
 #if USE_SERIAL
     Serial.begin(115200);
     while (!Serial); // wait active
+    log("Serial Started");
 #endif
 
 #if USE_WIFI
@@ -63,6 +61,7 @@ void setup()
     while (WiFi.status() != WL_CONNECTED) {
         delay(5);
     }
+    log("WIFI Started");
 #endif
     _last_action_time = millis();
 }
@@ -73,20 +72,14 @@ void setup()
 */
 void loop()
 {
-    _main_power = millis() - _last_action_time >= POWER_OFF_INTERVAL;
+    auto ellapsed = millis() - _last_action_time;
+    _main_power = ellapsed <= POWER_OFF_INTERVAL;
+    log(String(ellapsed));
     if(!_main_power)
     {
         log("Powering down");
         digitalWrite(POWER_PIN, LOW); // power off, global exit
     }
-#if USE_SERIAL
-    if(_main_power && millis() - _last_light_time > LIGHT_INTERVAL)
-    {
-        for(int i = 0; i < 10; i++)
-            log("messagemessagemessagemessagemessage");
-        _last_light_time = millis();
-    }
-#endif
     bool button_pressed = digitalRead(BUTTON_PIN);
     if(button_pressed != _button_pressed)
     {
@@ -99,7 +92,7 @@ void loop()
     //#if USE_SERIAL
     //    Serial.println(button_pressed);
     //#endif
-    delay(16); // roughly 60 Hz
+    delay(1000 / WORK_FREQUENCY);
 }
 
 void publishStateChange()
@@ -116,21 +109,21 @@ void publishStateChange()
         _state = STATE_1;
         command = CMD_UNMUTE;
     }
-    #if USE_WIFI
+#if USE_WIFI
     HTTPClient http;
     String request = "http://" + SERVER_IP + ":" + SERVER_PORT + "/oinkservice/" + command;
     http.begin(request);
     int response = http.GET();
     log("Sent " + request + " with result "+ response);
-    #endif // USE_WIFI
+#endif // USE_WIFI
 }
 
 // Logs in format sprintf(logString, "%10lu: %s", millis(), msg);
 void log(String msg)
 {
-    #if USE_SERIAL
+#if USE_SERIAL
     char logString[100];
     sprintf(logString, "%10lu: %s", millis(), msg.c_str());
     Serial.println(logString);
-    #endif // USE_SERIAL
+#endif // USE_SERIAL
 }
